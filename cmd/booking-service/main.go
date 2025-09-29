@@ -14,8 +14,9 @@ import (
 func main() {
 	repo := memory.NewBookingRepository()
 	bus := busdummy.NewEventBus()
-	policy := policydummy.NewPolicy()
-	svc := application.NewService(repo, bus, policy)
+	availabilityChecker := policydummy.NewAvailabilityChecker()
+	priceCalculator := policydummy.NewPriceCalculator()
+	svc := application.NewService(repo, bus, availabilityChecker, priceCalculator)
 	handler := bookinghttp.NewBookingHandler(svc)
 
 	log.Println("starting booking service on :8080")

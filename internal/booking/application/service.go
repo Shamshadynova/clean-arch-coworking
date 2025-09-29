@@ -7,20 +7,21 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/example/coworking/internal/booking/domain"
-	"github.com/example/coworking/internal/booking/ports/inbound"
-	"github.com/example/coworking/internal/booking/ports/outbound"
 )
-
-var _ inbound.BookingService = (*Service)(nil)
-
 type Service struct {
-	repo   outbound.BookingRepo
-	bus    outbound.EventBus
-	policy outbound.RoomSchedulePolicy
+	repo                BookingRepo
+	bus                 EventBus
+	availabilityChecker AvailabilityChecker
+	priceCalculator     PriceCalculator
 }
 
-func NewService(repo outbound.BookingRepo, bus outbound.EventBus, policy outbound.RoomSchedulePolicy) *Service {
-	return &Service{repo: repo, bus: bus, policy: policy}
+func NewService(repo BookingRepo, bus EventBus, availabilityChecker AvailabilityChecker, priceCalculator PriceCalculator) *Service {
+	return &Service{
+		repo:                repo,
+		bus:                 bus,
+		availabilityChecker: availabilityChecker,
+		priceCalculator:     priceCalculator,
+	}
 }
 
 func (s *Service) CreateBooking(ctx context.Context, roomID, userID uuid.UUID, from, to time.Time) (uuid.UUID, error) {
@@ -28,10 +29,10 @@ func (s *Service) CreateBooking(ctx context.Context, roomID, userID uuid.UUID, f
 	if err != nil {
 		return uuid.Nil, err
 	}
-	if err := s.policy.CheckAvailability(ctx, roomID, slot); err != nil {
+	if err := s.availabilityChecker.CheckAvailability(ctx, roomID, slot); err != nil {
 		return uuid.Nil, err
 	}
-	price, err := s.policy.CalculatePrice(ctx, roomID, slot)
+	price, err := s.priceCalculator.CalculatePrice(ctx, roomID, slot)
 	if err != nil {
 		return uuid.Nil, err
 	}

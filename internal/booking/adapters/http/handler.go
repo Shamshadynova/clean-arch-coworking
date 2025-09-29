@@ -8,15 +8,15 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/example/coworking/internal/booking/application"
 	"github.com/example/coworking/internal/booking/domain"
-	"github.com/example/coworking/internal/booking/ports/inbound"
 )
 
 type BookingHandler struct {
-	svc inbound.BookingService
+	svc application.BookingService
 }
 
-func NewBookingHandler(svc inbound.BookingService) *BookingHandler {
+func NewBookingHandler(svc application.BookingService) *BookingHandler {
 	return &BookingHandler{svc: svc}
 }
 
