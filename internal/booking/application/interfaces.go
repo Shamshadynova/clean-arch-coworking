@@ -2,21 +2,20 @@ package application
 
 import (
 	"context"
-	"time"
 
 	"github.com/google/uuid"
-		"github.com/example/coworking/internal/booking/domain"
-
+	"github.com/example/coworking/internal/booking/domain"
 )
 
 type BookingService interface {
-	CreateBooking(ctx context.Context, roomID, userID uuid.UUID, from, to time.Time) (uuid.UUID, error)
-	ConfirmPayment(ctx context.Context, bookingID uuid.UUID, txID string) error
+	CreateBooking(ctx context.Context, input CreateBookingInput) (uuid.UUID, error)
+	ConfirmPayment(ctx context.Context, input ConfirmPaymentInput) error
 }
 
 type BookingRepo interface {
 	Save(ctx context.Context, b *domain.Booking) error
 	FindByID(ctx context.Context, id uuid.UUID) (*domain.Booking, error)
+	FindByIdempotencyKey(ctx context.Context, key string) (*domain.Booking, error)
 }
 
 type EventBus interface {
@@ -33,4 +32,12 @@ type AvailabilityChecker interface {
 
 type PriceCalculator interface {
 	CalculatePrice(ctx context.Context, roomID uuid.UUID, slot domain.DateRange) (domain.Money, error)
+}
+
+type UnitOfWork interface {
+	Execute(ctx context.Context, fn func(BookingRepo, EventStore) error) error
+}
+
+type EventStore interface {
+	SaveEvents(ctx context.Context, events []domain.Event) error
 }

@@ -15,13 +15,15 @@ const (
 )
 
 type Booking struct {
-	id     uuid.UUID
-	roomID uuid.UUID
-	userID uuid.UUID
-	slot   DateRange
-	price  Money
-	status BookingStatus
-	events []Event
+	id              uuid.UUID
+	roomID          uuid.UUID
+	userID          uuid.UUID
+	slot            DateRange
+	price           Money
+	status          BookingStatus
+	events          []Event
+	idempotencyKey  string
+	transactionID   string
 }
 
 func NewBooking(roomID, userID uuid.UUID, slot DateRange, price Money) (*Booking, error) {
@@ -54,8 +56,21 @@ func (b *Booking) ConfirmPayment(txID string) error {
 		return ErrWrongState
 	}
 	b.status = Paid
+	b.transactionID = txID
 	b.raise(BookingConfirmed{BookingID: b.id.String(), TxID: txID})
 	return nil
+}
+
+func (b *Booking) SetIdempotencyKey(key string) {
+	b.idempotencyKey = key
+}
+
+func (b *Booking) IdempotencyKey() string {
+	return b.idempotencyKey
+}
+
+func (b *Booking) IsPaymentConfirmed(txID string) bool {
+	return b.status == Paid && b.transactionID == txID
 }
 
 func (b *Booking) PullEvents() []Event {
