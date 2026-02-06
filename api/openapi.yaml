@@ -1,0 +1,124 @@
+openapi: "3.0.3"
+info:
+  title: Coworking Booking API
+  version: 0.1.0
+  description: API for booking rooms in a coworking space.
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+paths:
+  /bookings:
+    post:
+      summary: Create a new booking
+      operationId: createBooking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBookingRequest"
+      responses:
+        "201":
+          description: Booking created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateBookingResponse"
+        "400":
+          description: Invalid input
+        "500":
+          description: Internal server error
+
+  /bookings/{id}:
+    get:
+      summary: Get booking details
+      operationId: getBooking
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Booking details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookingResponse"
+        "400":
+          description: Invalid booking ID
+        "404":
+          description: Booking not found
+        "500":
+          description: Internal server error
+
+components:
+  schemas:
+    CreateBookingRequest:
+      type: object
+      required:
+        - room_id
+        - user_id
+        - from
+        - to
+      properties:
+        room_id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        user_id:
+          type: string
+          format: uuid
+          example: "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+        from:
+          type: string
+          format: date-time
+          example: "2026-03-15T10:00:00Z"
+        to:
+          type: string
+          format: date-time
+          example: "2026-03-15T12:00:00Z"
+        idempotency_key:
+          type: string
+          description: Optional. Generated automatically if not provided.
+          example: "req-abc-123"
+
+    CreateBookingResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+
+    BookingResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        room_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        price_amount:
+          type: integer
+          format: int64
+          example: 100
+        price_currency:
+          type: string
+          example: "USD"
+        status:
+          type: string
+          enum: [pending, paid, cancelled]

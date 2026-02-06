@@ -42,11 +42,13 @@ func NewBooking(roomID, userID uuid.UUID, slot DateRange, price Money) (*Booking
 	return b, nil
 }
 
-func (b *Booking) ID() uuid.UUID {
-	return b.id
-}
-
-func (b *Booking) Status() BookingStatus { return b.status }
+func (b *Booking) ID() uuid.UUID         { return b.id }
+func (b *Booking) RoomID() uuid.UUID      { return b.roomID }
+func (b *Booking) UserID() uuid.UUID      { return b.userID }
+func (b *Booking) Slot() DateRange        { return b.slot }
+func (b *Booking) Price() Money           { return b.price }
+func (b *Booking) Status() BookingStatus  { return b.status }
+func (b *Booking) TransactionID() string  { return b.transactionID }
 
 func (b *Booking) ConfirmPayment(txID string) error {
 	if strings.TrimSpace(txID) == "" {

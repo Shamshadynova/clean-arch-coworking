@@ -8,6 +8,7 @@ import (
 	"github.com/example/coworking/internal/booking/domain"
 )
 
+// FIXME: hardcoded price — should calculate based on room hourly rate and slot duration.
 type PriceCalculator struct{}
 
 func NewPriceCalculator() *PriceCalculator {

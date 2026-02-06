@@ -10,6 +10,8 @@ import (
 	"github.com/example/coworking/internal/booking/domain"
 )
 
+// TODO: replace mutex-based UoW with SQL transaction (BEGIN/COMMIT/ROLLBACK)
+// when switching to PostgreSQL.
 type unitOfWork struct {
 	bookingRepo application.BookingRepo
 	eventStore  application.EventStore

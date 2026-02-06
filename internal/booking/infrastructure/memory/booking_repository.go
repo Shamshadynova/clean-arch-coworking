@@ -9,6 +9,7 @@ import (
 	"github.com/example/coworking/internal/booking/domain"
 )
 
+// TODO: replace in-memory store with PostgreSQL implementation.
 type BookingRepository struct {
 	mu              sync.RWMutex
 	store           map[uuid.UUID]*domain.Booking

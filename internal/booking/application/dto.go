@@ -37,6 +37,18 @@ func (i CreateBookingInput) Validate() error {
 	return nil
 }
 
+// BookingResponse is the read-model returned by GetBooking.
+type BookingResponse struct {
+	ID            uuid.UUID `json:"id"`
+	RoomID        uuid.UUID `json:"room_id"`
+	UserID        uuid.UUID `json:"user_id"`
+	From          time.Time `json:"from"`
+	To            time.Time `json:"to"`
+	PriceAmount   int64     `json:"price_amount"`
+	PriceCurrency string    `json:"price_currency"`
+	Status        string    `json:"status"`
+}
+
 type ConfirmPaymentInput struct {
 	BookingID      uuid.UUID
 	TransactionID  string

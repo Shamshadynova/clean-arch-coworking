@@ -54,6 +54,8 @@ func (s *EventStore) SaveEvents(ctx context.Context, events []domain.Event) erro
 		s.events = append(s.events, outboxEvent)
 	}
 	
+	// TODO: replace goroutine-based publish with a reliable polling publisher.
+	// Current approach may lose events if the process crashes before publishing.
 	go s.publishPendingEvents(ctx)
 	
 	return nil
