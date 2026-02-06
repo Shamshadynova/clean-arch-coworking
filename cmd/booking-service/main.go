@@ -9,13 +9,18 @@ import (
 	busdummy "github.com/example/coworking/internal/booking/infrastructure/bus/dummy"
 	"github.com/example/coworking/internal/booking/infrastructure/memory"
 	policydummy "github.com/example/coworking/internal/booking/infrastructure/policy/dummy"
+	transaction "github.com/example/coworking/internal/booking/infrastructure/transaction"
+	outbox "github.com/example/coworking/internal/booking/infrastructure/outbox"
 )
 
 func main() {
 	repo := memory.NewBookingRepository()
 	bus := busdummy.NewEventBus()
-	policy := policydummy.NewPolicy()
-	svc := application.NewService(repo, bus, policy)
+	availabilityChecker := policydummy.NewAvailabilityChecker()
+	priceCalculator := policydummy.NewPriceCalculator()
+	eventStore := outbox.NewEventStore(bus)
+	uow := transaction.NewUnitOfWork(repo, eventStore)
+	svc := application.NewService(repo, bus, availabilityChecker, priceCalculator, uow)
 	handler := bookinghttp.NewBookingHandler(svc)
 
 	log.Println("starting booking service on :8080")

@@ -8,15 +8,15 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/example/coworking/internal/booking/application"
 	"github.com/example/coworking/internal/booking/domain"
-	"github.com/example/coworking/internal/booking/ports/inbound"
 )
 
 type BookingHandler struct {
-	svc inbound.BookingService
+	svc application.BookingService
 }
 
-func NewBookingHandler(svc inbound.BookingService) *BookingHandler {
+func NewBookingHandler(svc application.BookingService) *BookingHandler {
 	return &BookingHandler{svc: svc}
 }
 
@@ -27,10 +27,11 @@ func (h *BookingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		RoomID string    `json:"room_id"`
-		UserID string    `json:"user_id"`
-		From   time.Time `json:"from"`
-		To     time.Time `json:"to"`
+		RoomID         string    `json:"room_id"`
+		UserID         string    `json:"user_id"`
+		From           time.Time `json:"from"`
+		To             time.Time `json:"to"`
+		IdempotencyKey string    `json:"idempotency_key"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -50,7 +51,20 @@ func (h *BookingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid user_id", http.StatusBadRequest)
 		return
 	}
-	id, err := h.svc.CreateBooking(r.Context(), roomID, userID, req.From, req.To)
+	
+	if req.IdempotencyKey == "" {
+		req.IdempotencyKey = uuid.New().String()
+	}
+	
+	input := application.CreateBookingInput{
+		RoomID:         roomID,
+		UserID:         userID,
+		From:           req.From,
+		To:             req.To,
+		IdempotencyKey: req.IdempotencyKey,
+	}
+	
+	id, err := h.svc.CreateBooking(r.Context(), input)
 	if err != nil {
 		writeError(w, err)
 		return
