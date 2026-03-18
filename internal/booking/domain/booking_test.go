@@ -52,6 +52,55 @@ func TestNewBooking_ZeroSlot(t *testing.T) {
 	}
 }
 
+func TestCancel_Success(t *testing.T) { //успешная отмена бронирования 
+	slot := validSlot(t)//создаем диапозон дат, будущие даты
+	//новая бронь
+	booking, _ := domain.NewBooking(uuid.New(), uuid.New(), slot, domain.NewMoney(100, "USD"))
+	_ = booking.PullEvents() //очищаем все события 
+	//тестируем только Cancel()
+	err := booking.Cancel() //вызываем метод Cancel()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	//проверка, что статус изменился на Cancel()
+	if booking.Status() != domain.Cancelled {
+		t.Errorf("expected status Cancelled, got %v", booking.Status())
+	}
+	//теперь получаем события после Cancel()
+	events := booking.PullEvents()
+	if len(events) != 1 { //должно быть 1 событие 
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+
+	//проверка события, что именно BookingCancelled
+	if _, ok := events[0].(domain.BookingCancelled); !ok {
+		t.Errorf("expected BookingCancelled event, got %T", events[0])
+	}
+}
+
+func TestCancel_AlreadyPaid(t *testing.T) { //бронирование оплачено
+	slot := validSlot(t)
+	booking, _ := domain.NewBooking(uuid.New(), uuid.New(), slot, domain.NewMoney(100, "USD"))
+	_ = booking.ConfirmPayment("tx-123") //оплачиваем бронь 
+
+	err := booking.Cancel() //пытаемся отменить 
+	if err != domain.ErrBookingAlreadyPaid { //ожижаем ошибку 
+		t.Errorf("expected ErrBookingAlreadyPaid, got %v", err)
+	}
+}
+func TestCancel_AlreadyCancelled(t *testing.T) { //бронирование уже отменено 
+	slot := validSlot(t)
+	booking, _ := domain.NewBooking(uuid.New(), uuid.New(), slot, domain.NewMoney(100, "USD"))
+
+	_ = booking.Cancel() //отменяем первый раз 
+	err := booking.Cancel() //отменяем второй раз - ошибка 
+
+	if err != domain.ErrAlreadyCancelled { //выводим ошибку 
+		t.Errorf("expected ErrAlreadyCancelled, got %v", err)
+	}
+}
+
 func TestConfirmPayment_Success(t *testing.T) {
 	slot := validSlot(t)
 	booking, _ := domain.NewBooking(uuid.New(), uuid.New(), slot, domain.NewMoney(100, "USD"))

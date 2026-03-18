@@ -12,21 +12,25 @@ import (
 
 // TODO: replace mutex-based UoW with SQL transaction (BEGIN/COMMIT/ROLLBACK)
 // when switching to PostgreSQL.
+//структура реализует интерфейс UnitOfWork
 type unitOfWork struct {
-	bookingRepo application.BookingRepo
-	eventStore  application.EventStore
-	mu          sync.Mutex
+	bookingRepo application.BookingRepo //для работы с бронированием 
+	eventStore  application.EventStore //для сохранения доменных событий
+	mu          sync.Mutex //для блокировки 
 }
-
+//создаем констурктор 
+//принимает два интерфейса 
+//возвращает интерфейс UnitOfWork 
 func NewUnitOfWork(bookingRepo application.BookingRepo, eventStore application.EventStore) application.UnitOfWork {
-	return &unitOfWork{
-		bookingRepo: bookingRepo,
+	return &unitOfWork{ //создаем структуру 
+		bookingRepo: bookingRepo, //сохраняем переданные зависимости 
 		eventStore:  eventStore,
 	}
 }
-
+//создаем метод основной для UnitOfWork 
+//принимает контекст и функцию бизнес логики 
 func (u *unitOfWork) Execute(ctx context.Context, fn func(application.BookingRepo, application.EventStore) error) error {
-	u.mu.Lock()
+	u.mu.Lock() //блокировка от двойной записи 
 	defer u.mu.Unlock()
 	
 	// Create transactional wrappers
@@ -78,6 +82,10 @@ func (t *transactionalRepo) FindByID(ctx context.Context, id uuid.UUID) (*domain
 
 func (t *transactionalRepo) FindByIdempotencyKey(ctx context.Context, key string) (*domain.Booking, error) {
 	return t.repo.FindByIdempotencyKey(ctx, key)
+}
+
+func (t *transactionalRepo) FindAllByRoomID(ctx context.Context, roomID uuid.UUID) ([]*domain.Booking, error) {
+	return t.repo.FindAllByRoomID(ctx, roomID)
 }
 
 type transactionalEventStore struct {
