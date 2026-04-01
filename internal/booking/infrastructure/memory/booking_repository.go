@@ -53,6 +53,10 @@ func (r *BookingRepository) FindByID(_ context.Context, id uuid.UUID) (*domain.B
 	return booking, nil
 }
 
+func (r *BookingRepository) FindByIDForUpdate(ctx context.Context, id uuid.UUID) (*domain.Booking, error) {
+	return r.FindByID(ctx, id)
+}
+
 //метод FindByIdempotencyKey поиска по ключу 
 //не был ли уже выполнен такой же POST запрос 
 func (r *BookingRepository) FindByIdempotencyKey(_ context.Context, key string) (*domain.Booking, error) {

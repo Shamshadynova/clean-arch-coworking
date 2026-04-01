@@ -57,6 +57,25 @@ func NewBooking(roomID, userID uuid.UUID, slot DateRange, price Money) (*Booking
 	return b, nil
 }
 
+// конструктор для восстановления из БД 
+func RestoreBooking(
+	id uuid.UUID,
+	roomID uuid.UUID,
+	userID uuid.UUID,
+	slot DateRange,
+	status int,
+	idempotencyKey string,
+) *Booking {
+	return &Booking{
+		id: id,
+		roomID: roomID,
+		userID: userID,
+		slot: slot,
+		status: BookingStatus(status),
+		idempotencyKey: idempotencyKey,
+	}
+}
+
 //создаются методы для структуры Booking 
 func (b *Booking) ID() uuid.UUID         { return b.id }
 func (b *Booking) RoomID() uuid.UUID      { return b.roomID }

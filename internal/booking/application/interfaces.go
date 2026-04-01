@@ -17,6 +17,7 @@ type BookingService interface {
 type BookingRepo interface {
 	Save(ctx context.Context, b *domain.Booking) error
 	FindByID(ctx context.Context, id uuid.UUID) (*domain.Booking, error)
+	FindByIDForUpdate(ctx context.Context, id uuid.UUID) (*domain.Booking, error) 
 	FindByIdempotencyKey(ctx context.Context, key string) (*domain.Booking, error)
 	FindAllByRoomID(ctx context.Context, roomID uuid.UUID) ([]*domain.Booking, error)
 }

@@ -47,90 +47,69 @@ func (s *Service) CreateBooking(ctx context.Context, input CreateBookingInput) (
 	//input вызывает метод Validate у CreateBookingInput
 	//если ошибка не равна nil, значит данные не корректны 
 	if err := input.Validate(); err != nil {
-		//тогда возвращаем пустой id и ошибку "invalid input
 		return uuid.Nil, fmt.Errorf("invalid input: %w", err)
 	}
-
-	//проверка idempotency
-	//сервис (s) обращается к repo и вызывает метод FindByIdempotencyKey у интерфейса BookingRepo
-	//принимает контекст и уникальный ключ запроса, который приходит от клиента
-	existing, err := s.repo.FindByIdempotencyKey(ctx, input.IdempotencyKey)
-	//если ошибка равна nil(все норм ошибки нет) или бронирование не равно nil (бронирование найдено)
-	//значит клиент с ключом уже существует 
-	if err == nil && existing != nil {
-		//сервис вызывает логгерс методом инфо из стандартной библиотеки и записывает информацию 
-		s.logger.Info("idempotent booking request, returning existing", //получен повторный запрос бронирования, возвращаем сущ. бронирование
-			"booking_id", existing.ID(), //добавляем поля id бронирования 
-			"idempotency_key", input.IdempotencyKey, //ключ идемпотентности, по которому нашли бронь
-		)
-		return existing.ID(), nil //вовращаем id сущ. бронирования 
-	}
-
-	//диапозон дат бронирования 
-	//возвращаем диапозон или ошибку := domain вызывает функцию NewDateRange(из domain/date_range)
-	//передаем input.From (начало) и input.To (конец) бронирования 
-	slot, err := domain.NewDateRange(input.From, input.To)
-	//если функция вернула ошибку 
-	if err != nil {
-		//то возвращаем пустой id uuid.Nil и ошибку invalid booking period
-		return uuid.Nil, fmt.Errorf("invalid booking period: %w", err)
-	}
-
-	//создается переменная типа uuid.UUID
+//создаем переменную bookingID, для временного хранения данных 
+//из транзакции 
 	var bookingID uuid.UUID
-	//запуск транзакции 
-	//сервис (s) вызывает интерфейс UnitOfWork с методом Execute и пекредает функцию 
-	//которая принимает repo и eventStore, возвращает ошибку 
-	err = s.uow.Execute(ctx, func(repo BookingRepo, eventStore EventStore) error {
-		//создаем бронирование. Выхываем доменный сервис с методом CreateValidatedBooking
+//запускаем транзакцию
+	err := s.uow.Execute(ctx, func(repo BookingRepo, eventStore EventStore) error {
+ //проверяем IdempotencyKey уникальность и  ищем бронирование по ключу 
+		existing, err := repo.FindByIdempotencyKey(ctx, input.IdempotencyKey)
+		//если ошибки нет и бронь найдена
+		if err == nil && existing != nil {
+			//пишем в лог, что это повторнвй запрос 
+			s.logger.Info("idempotent booking request, returning existing",
+				"booking_id", existing.ID(),
+				"idempotency_key", input.IdempotencyKey,
+			)
+			
+			bookingID = existing.ID() //сохраняем найденный айди 
+			return nil //выходим из транзакции 
+		}
+
+		//создаем диапозон дат slot, передаем вх данные 
+		slot, err := domain.NewDateRange(input.From, input.To)
+		if err != nil { //если даты некорретны, то ошибка 
+			return fmt.Errorf("invalid booking period: %w", err)
+		}
+
+		//создаем бронирование через доменный сервис 
+		//передаем данные 
 		booking, err := s.domainService.CreateValidatedBooking(
-			//передаем параметры
-			ctx, //контекст запроса 
-			input.RoomID, //id комнаты, которую пользователь хочет забронировать
-			input.UserID, //id пользователя, который делает бронирование
-			slot, //диапозон бронирования 
+			ctx,
+			input.RoomID,
+			input.UserID,
+			slot,
 		)
-		//если произошла ошибка, возвращаем текст booking validation failed
 		if err != nil {
 			return fmt.Errorf("booking validation failed: %w", err)
 		}
-
-		//успешное бронирование вызывает метод SetIdempotencyKey для структуры  Booking struct
-		//и предаем вх.данные input.Уникальный ключ запроса
+		//устанавливаем ключ 
 		booking.SetIdempotencyKey(input.IdempotencyKey)
 
-		//сохраняем бронирование в базе данных через repo.Save(передаем контекст и бронирование)
+		//сохраняем бронь в базу 
 		if err := repo.Save(ctx, booking); err != nil {
-			//если ошибка, то выводим текст failed to save booking и откатываем транзакцию
 			return fmt.Errorf("failed to save booking: %w", err)
 		}
-
-		//добавляем в раннее созданную переменную новый id бронирования 
+//сохраняем айди созданного бронирования 
 		bookingID = booking.ID()
-		
-		//ошибок нет, транзакция зафиксировалась 
 		return nil
 	})
-
-	//если ошибка внутри транзакции, то пишем в лог 
+//если внутри транзакции ошибка 
 	if err != nil {
-		//вызываем сервис.логгер.тип Error 
 		s.logger.Error("failed to create booking",
 			"room_id", input.RoomID,
 			"user_id", input.UserID,
 			"error", err,
 		)
-		//возвращаем пустой идентификатор и ошибку 
 		return uuid.Nil, err
 	}
 
-	//сервпис пишет в лог. info если бронирование успешно создано 
 	s.logger.Info("booking created",
 		"booking_id", bookingID,
-		"room_id", input.RoomID,
-		"user_id", input.UserID,
 	)
-	//возвращаем успешное бронирование 
+
 	return bookingID, nil
 }
 
@@ -138,7 +117,7 @@ func (s *Service) CancelBooking(ctx context.Context, id uuid.UUID) error {
     
     err := s.uow.Execute(ctx, func(repo BookingRepo, eventStore EventStore) error {
 
-        booking, err := repo.FindByID(ctx, id) //ищем внутри транзакции бронь по id
+        booking, err := repo.FindByIDForUpdate(ctx, id) //ищем внутри транзакции бронь по id
         if err != nil { 
 			//если ошибка, транзакция прерывается 
             return fmt.Errorf("find booking: %w", err)
@@ -147,7 +126,7 @@ func (s *Service) CancelBooking(ctx context.Context, id uuid.UUID) error {
 		//если бронь пустая (сущ ли такая бронь)
         if booking == nil {
 			//если из памяти или бд ничего не вернул, значит ошибка 
-            return fmt.Errorf("booking not found")
+            return domain.ErrBookingNotFound
         }
 
 		//вызываем метод Cancel() у самого объекта booking

@@ -23,7 +23,10 @@ func NewAvailabilityChecker(repo application.BookingRepo) *AvailabilityChecker {
 }
 //создаем метод для структуры 
 //проверяем свободна ли комната в указанный период 
-func (a *AvailabilityChecker) CheckAvailability(ctx context.Context, roomID uuid.UUID, slot domain.DateRange) error {
+func (a *AvailabilityChecker) CheckAvailability(ctx context.Context,
+	//repo application.BookingRepo, 
+	roomID uuid.UUID,
+	slot domain.DateRange) error {
 	//вызываем метод репозитория FindAllByRoomID
 	//передаем контекст и айди комнаты 
 	//получаем bookings список всех бронирований по этой комнате 

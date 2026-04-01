@@ -8,14 +8,17 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	"database/sql"
+	
 
 	bookinghttp "github.com/example/coworking/internal/booking/adapters/http"
 	"github.com/example/coworking/internal/booking/application"
 	busdummy "github.com/example/coworking/internal/booking/infrastructure/bus/dummy"
-	"github.com/example/coworking/internal/booking/infrastructure/memory"
-	"github.com/example/coworking/internal/booking/infrastructure/outbox"
+	
+	
 	policydummy "github.com/example/coworking/internal/booking/infrastructure/policy/dummy"
 	"github.com/example/coworking/internal/booking/infrastructure/transaction"
+	"github.com/example/coworking/internal/booking/infrastructure/postgres"
 	"github.com/example/coworking/internal/config"
 )
 
@@ -47,15 +50,27 @@ func main() {
 	//новый логгер устанавливаем по умолчанию 
 	slog.SetDefault(logger)
 
+	// подключаемся к бд
+	db, err := sql.Open("postgres", cfg.PostgresHost)
+	if err != nil  {
+		logger.Error("failed to connect db", "error", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	if err := db.Ping(); err != nil {
+		logger.Error("failed to ping db", "error", err)
+		os.Exit(1)
+	}
 	// Wire dependencies.
 	//создаем переменную repo и вызываем конструктор NewBookingRepository() и пакета memory 
 	//этот репо будет сохранять и получать бронирования 
-	repo := memory.NewBookingRepository()
+	repo := postgres.NewBookingRepository(db)
 	bus := busdummy.NewEventBus() //отвечает за отправку событий в другие сервисы 
 	availabilityChecker := policydummy.NewAvailabilityChecker(repo)//проверка доступности комнаты и дат
 	priceCalculator := policydummy.NewPriceCalculator() //расчет стоимости бронирования 
-	eventStore := outbox.NewEventStore(bus) //передаем перменную (bus). сохраням доменные события, после сохранения события отправляются 
-	uow := transaction.NewUnitOfWork(repo, eventStore) //управление бизнес операцией 
+	//eventStore := outbox.NewEventStore(bus) //передаем перменную (bus). сохраням доменные события, после сохранения события отправляются 
+	uow := transaction.NewUnitOfWork(db, bus) //управление бизнес операцией 
 
 	//создаем сервис приложения svc 
 	//вызываем конструктор NewService и передаем все зависимости 
