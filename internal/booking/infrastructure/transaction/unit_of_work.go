@@ -38,8 +38,8 @@ func (u *unitOfWork) Execute(ctx context.Context, fn func(application.BookingRep
 		return err
 	 }
 
-	 repo := postgres.NewBookingRepository(u.db) //непонимаю, если я передаю u.db, то обхожу транзакцию? 
-	 eventStore := outbox.NewEventStore(u.bus) //вне транзакции 
+	 repo := postgres.NewBookingRepository(tx) //непонимаю, если я передаю u.db, то обхожу транзакцию? 
+	 eventStore := outbox.NewEventStore(tx, u.bus) //сохраняем событие в бд, а потом отправляем событие в bus 
 	
 	// Create transactional wrappers
 	transactionalRepo := &transactionalRepo{ //обертка для сбора событий 

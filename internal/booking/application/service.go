@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"errors"
 
 	"github.com/google/uuid"
 
@@ -56,9 +57,11 @@ func (s *Service) CreateBooking(ctx context.Context, input CreateBookingInput) (
 	err := s.uow.Execute(ctx, func(repo BookingRepo, eventStore EventStore) error {
  //проверяем IdempotencyKey уникальность и  ищем бронирование по ключу 
 		existing, err := repo.FindByIdempotencyKey(ctx, input.IdempotencyKey)
-		//если ошибки нет и бронь найдена
-		if err == nil && existing != nil {
-			//пишем в лог, что это повторнвй запрос 
+	
+		if err != nil && !errors.Is(err, domain.ErrBookingNotFound) { //если запись в БД не найдена 
+			return fmt.Errorf("find by idempotency key: %w", err)
+		}
+		if existing != nil {
 			s.logger.Info("idempotent booking request, returning existing",
 				"booking_id", existing.ID(),
 				"idempotency_key", input.IdempotencyKey,

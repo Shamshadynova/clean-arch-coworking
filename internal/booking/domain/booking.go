@@ -58,7 +58,7 @@ func NewBooking(roomID, userID uuid.UUID, slot DateRange, price Money) (*Booking
 }
 
 // конструктор для восстановления из БД 
-func RestoreBooking(
+func MarshalBooking(
 	id uuid.UUID,
 	roomID uuid.UUID,
 	userID uuid.UUID,

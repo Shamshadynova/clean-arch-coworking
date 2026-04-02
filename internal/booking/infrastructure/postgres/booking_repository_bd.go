@@ -5,14 +5,20 @@ import (
 	"database/sql"
 	"fmt"
 	"time"
+	"errors"
 
 	"github.com/example/coworking/internal/booking/domain"
 	"github.com/google/uuid"
 )
 
+type DB interface { //методы sql запросов
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) // ExecContext выполнит sql запрос без возврата строк или ошибку
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) //вернет несколько строк или ошибку
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row        //вернет одну строку
+}
 
 type BookingRepository struct {
-	db *sql.DB
+	db DB
 }
 
 // нужна только для чтения из базы
@@ -26,7 +32,7 @@ type bookingRow struct {
 	idempotencyKey string
 }
 
-func NewBookingRepository(db *sql.DB) *BookingRepository {
+func NewBookingRepository(db DB) *BookingRepository {
 	return &BookingRepository{db: db}
 }
 
@@ -35,8 +41,7 @@ func NewBookingRepository(db *sql.DB) *BookingRepository {
 func (r *BookingRepository) Save(ctx context.Context, booking *domain.Booking) error {
 	// вызывается метод ExecContext у r.db, указываем, что нам нужна только ошибка
 	// ExecContext выполнит sql запрос без возврата строк
-	_, err := r.db.ExecContext(
-		ctx,
+	_, err := r.db.ExecContext(ctx,
 		`
 		INSERT INTO bookings (
 			id, room_id, user_id, from_date, to_date, status, idempotency_key
@@ -94,25 +99,20 @@ func (r *BookingRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain
 		&bi.idempotencyKey,
 	)
 
-	if err == sql.ErrNoRows {
-		// если запись не найдена
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, domain.ErrBookingNotFound
-	}
+}
 
 	if err != nil {
 		// если произошла другая ошибка
 		return nil, fmt.Errorf("scan booking error: %w", err)
 	}
 
-	// проверяем даты из БД. Проверяем валидацию slot
-	slot, err := domain.NewDateRange(bi.fromDate, bi.toDate)
-	if err != nil {
-		// если ошибка
-		return nil, domain.ErrInvalidRange
-	}
+	// читаю даты из БД
+	slot := domain.RestoreDateRange(bi.fromDate, bi.toDate)
 
 	// восстанавливаем сущность Booking из данных
-	booking := domain.RestoreBooking(
+	booking := domain.MarshalBooking(
 		bi.id,
 		bi.roomID,
 		bi.userID,
@@ -151,25 +151,19 @@ func (r *BookingRepository) FindByIDForUpdate(ctx context.Context, id uuid.UUID)
 		&bi.idempotencyKey,
 	)
 
-	if err == sql.ErrNoRows {
-		// если запись не найдена
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, domain.ErrBookingNotFound
-	}
+    }
 
 	if err != nil {
 		// если произошла другая ошибка
 		return nil, fmt.Errorf("scan booking error: %w", err)
 	}
 
-	// проверяем даты из БД. Проверяем валидацию slot
-	slot, err := domain.NewDateRange(bi.fromDate, bi.toDate)
-	if err != nil {
-		// если ошибка
-		return nil, domain.ErrInvalidRange
-	}
+	slot := domain.RestoreDateRange(bi.fromDate, bi.toDate)
 
 	// восстанавливаем сущность Booking из данных
-	booking := domain.RestoreBooking(
+	booking := domain.MarshalBooking(
 		bi.id,
 		bi.roomID,
 		bi.userID,
@@ -207,10 +201,9 @@ func (r *BookingRepository) FindByIdempotencyKey(ctx context.Context, key string
 		&bi.idempotencyKey,
 	)
 
-	if err == sql.ErrNoRows {
-		// если запись не найдена
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, domain.ErrBookingNotFound
-	}
+    }
 
 	if err != nil {
 		// если произошла другая ошибка
@@ -218,14 +211,10 @@ func (r *BookingRepository) FindByIdempotencyKey(ctx context.Context, key string
 	}
 
 	// проверяем даты из БД. Проверяем валидацию slot
-	slot, err := domain.NewDateRange(bi.fromDate, bi.toDate)
-	if err != nil {
-		// если ошибка
-		return nil, domain.ErrInvalidRange
-	}
+	slot := domain.RestoreDateRange(bi.fromDate, bi.toDate)
 
 	// восстанавливаем сущность Booking из данных
-	booking := domain.RestoreBooking(
+	booking := domain.MarshalBooking(
 		bi.id,
 		bi.roomID,
 		bi.userID,
@@ -240,9 +229,7 @@ func (r *BookingRepository) FindByIdempotencyKey(ctx context.Context, key string
 
 // FindAllByRoomID поиск всех бронирований по roomID
 func (r *BookingRepository) FindAllByRoomID(ctx context.Context, roomID uuid.UUID) ([]*domain.Booking, error) {
-	rows, err := r.db.QueryContext(
-		ctx,
-		// возвращаем несколько строк или ошибку
+	rows, err := r.db.QueryContext(ctx,// возвращаем несколько строк или ошибку
 		`
 		SELECT id, room_id, user_id, from_date, to_date, status, idempotency_key
 		FROM bookings
@@ -277,12 +264,9 @@ func (r *BookingRepository) FindAllByRoomID(ctx context.Context, roomID uuid.UUI
 			return nil, err
 		}
 
-		slot, err := domain.NewDateRange(bi.fromDate, bi.toDate)
-		if err != nil {
-			return nil, err
-		}
+		slot := domain.RestoreDateRange(bi.fromDate, bi.toDate)
 
-		booking := domain.RestoreBooking(
+		booking := domain.MarshalBooking(
 			bi.id,
 			bi.roomID,
 			bi.userID,
@@ -302,18 +286,3 @@ func (r *BookingRepository) FindAllByRoomID(ctx context.Context, roomID uuid.UUI
 
 	return result, nil
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
