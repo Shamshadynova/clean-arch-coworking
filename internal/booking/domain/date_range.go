@@ -14,6 +14,13 @@ func NewDateRange(from, to time.Time) (DateRange, error) {
 	return DateRange{From: from, To: to}, nil
 }
 
+func RestoreDateRange(from, to time.Time) DateRange {
+	return DateRange{
+		From: from,
+		To:   to,
+	}
+}
+
 func (r DateRange) IsOverlapping(other DateRange) bool {
 	return r.From.Before(other.To) && other.From.Before(r.To)
 }

@@ -2,57 +2,72 @@ package transaction
 
 import (
 	"context"
+	"database/sql"
 	"sync"
 
 	"github.com/google/uuid"
 
 	"github.com/example/coworking/internal/booking/application"
 	"github.com/example/coworking/internal/booking/domain"
+	"github.com/example/coworking/internal/booking/infrastructure/postgres"
+	"github.com/example/coworking/internal/booking/infrastructure/outbox"
 )
 
 // TODO: replace mutex-based UoW with SQL transaction (BEGIN/COMMIT/ROLLBACK)
 // when switching to PostgreSQL.
-type unitOfWork struct {
-	bookingRepo application.BookingRepo
-	eventStore  application.EventStore
-	mu          sync.Mutex
-}
 
-func NewUnitOfWork(bookingRepo application.BookingRepo, eventStore application.EventStore) application.UnitOfWork {
-	return &unitOfWork{
-		bookingRepo: bookingRepo,
-		eventStore:  eventStore,
+type unitOfWork struct {
+	db   *sql.DB //создадим пул соединений. потокобезопасен 
+	bus application.EventBus //отправка событий, не связана с бд 
+}
+//создаем констурктор 
+//принимает два интерфейса 
+//возвращает интерфейс UnitOfWork 
+func NewUnitOfWork(db *sql.DB, bus application.EventBus) application.UnitOfWork {
+	return &unitOfWork{ //создаем структуру 
+		db: db,
+		bus : bus, 
 	}
 }
-
+//создаем метод основной для UnitOfWork 
+//принимает контекст и функцию бизнес логики
+//выполнение бизнес-операции внутри транзакции 
 func (u *unitOfWork) Execute(ctx context.Context, fn func(application.BookingRepo, application.EventStore) error) error {
-	u.mu.Lock()
-	defer u.mu.Unlock()
+	tx, err := u.db.BeginTx(ctx, nil) //начало транзакции
+	 if err != nil { //если не удалось начать транзакцию, то завершаем работу
+		return err
+	 }
+
+	 repo := postgres.NewBookingRepository(tx) //непонимаю, если я передаю u.db, то обхожу транзакцию? 
+	 eventStore := outbox.NewEventStore(tx, u.bus) //сохраняем событие в бд, а потом отправляем событие в bus 
 	
 	// Create transactional wrappers
-	transactionalRepo := &transactionalRepo{
-		repo:   u.bookingRepo,
+	transactionalRepo := &transactionalRepo{ //обертка для сбора событий 
+		repo:   repo,
 		events: make([]domain.Event, 0),
 	}
 	
 	transactionalEventStore := &transactionalEventStore{
-		store: u.eventStore,
+		store: eventStore,
 		repo:  transactionalRepo,
 	}
 	
 	// Execute business logic
-	if err := fn(transactionalRepo, transactionalEventStore); err != nil {
+	err = fn(transactionalRepo, transactionalEventStore)
+	if err != nil { //если ошибка 
+		tx.Rollback() //откаьываем транзакцию 
 		return err
 	}
-	
+
 	// Save collected events after successful execution
 	if len(transactionalRepo.events) > 0 {
-		if err := u.eventStore.SaveEvents(ctx, transactionalRepo.events); err != nil {
+		if err := eventStore.SaveEvents(ctx, transactionalRepo.events); err != nil {
+			tx.Rollback()
 			return err
 		}
 	}
 	
-	return nil
+	return tx.Commit()
 }
 
 type transactionalRepo struct {
@@ -76,8 +91,16 @@ func (t *transactionalRepo) FindByID(ctx context.Context, id uuid.UUID) (*domain
 	return t.repo.FindByID(ctx, id)
 }
 
+func (t *transactionalRepo) FindByIDForUpdate(ctx context.Context, id uuid.UUID) (*domain.Booking, error) {
+	return t.repo.FindByIDForUpdate(ctx, id)
+}
+
 func (t *transactionalRepo) FindByIdempotencyKey(ctx context.Context, key string) (*domain.Booking, error) {
 	return t.repo.FindByIdempotencyKey(ctx, key)
+}
+
+func (t *transactionalRepo) FindAllByRoomID(ctx context.Context, roomID uuid.UUID) ([]*domain.Booking, error) {
+	return t.repo.FindAllByRoomID(ctx, roomID)
 }
 
 type transactionalEventStore struct {

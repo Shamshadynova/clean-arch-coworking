@@ -12,3 +12,8 @@ type BookingConfirmed struct {
 	BookingID string
 	TxID      string
 }
+
+
+type BookingCancelled struct {
+	BookingID string
+}

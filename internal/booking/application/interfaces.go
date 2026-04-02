@@ -11,12 +11,15 @@ type BookingService interface {
 	CreateBooking(ctx context.Context, input CreateBookingInput) (uuid.UUID, error)
 	GetBooking(ctx context.Context, id uuid.UUID) (*BookingResponse, error)
 	ConfirmPayment(ctx context.Context, input ConfirmPaymentInput) error
+	CancelBooking(ctx context.Context, id uuid.UUID) error
 }
 
 type BookingRepo interface {
 	Save(ctx context.Context, b *domain.Booking) error
 	FindByID(ctx context.Context, id uuid.UUID) (*domain.Booking, error)
+	FindByIDForUpdate(ctx context.Context, id uuid.UUID) (*domain.Booking, error) 
 	FindByIdempotencyKey(ctx context.Context, key string) (*domain.Booking, error)
+	FindAllByRoomID(ctx context.Context, roomID uuid.UUID) ([]*domain.Booking, error)
 }
 
 type EventBus interface {
